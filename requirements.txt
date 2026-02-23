@@ -4,8 +4,6 @@ pymysql==1.1.1
 cryptography==44.0.0
 python-dotenv==1.0.1
 pydantic[email]==2.10.4
-ultralytics
-mediapipe>=0.10.30
-opencv-python-headless
-numpy
 python-multipart==0.0.20
+numpy
+opencv-python-headless
