@@ -4,9 +4,12 @@ import urllib.request
 import numpy as np
 import cv2
 
-_yolo_available = False
-_mediapipe_available = False
+# ── OpenCV Haar Cascade (always available, lightweight) ──────────
+_cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+face_cascade = cv2.CascadeClassifier(_cascade_path)
 
+# ── Optional: YOLO for person/phone detection ────────────────────
+_yolo_available = False
 try:
     from ultralytics import YOLO
     yolo_model = YOLO("yolov8n.pt")
@@ -14,6 +17,8 @@ try:
 except Exception:
     yolo_model = None
 
+# ── Optional: MediaPipe for gaze detection ───────────────────────
+_mediapipe_available = False
 try:
     import mediapipe as mp
     from mediapipe.tasks.python import BaseOptions
@@ -28,7 +33,6 @@ try:
         "https://storage.googleapis.com/mediapipe-models/"
         "face_landmarker/face_landmarker/float16/latest/face_landmarker.task"
     )
-
     if not os.path.exists(MODEL_PATH):
         urllib.request.urlretrieve(_MODEL_URL, MODEL_PATH)
 
@@ -78,18 +82,17 @@ def _check_gaze(landmarks) -> bool:
     return avg < 0.30 or avg > 0.70
 
 
-def analyze_frame(b64_frame: str) -> dict:
-    if not _yolo_available and not _mediapipe_available:
-        return {
-            "person_count": 0,
-            "phone_detected": False,
-            "face_detected": True,
-            "violations": [],
-            "violation_count": 0,
-        }
+def _opencv_face_detect(frame):
+    """Lightweight face detection using OpenCV Haar Cascade."""
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    faces = face_cascade.detectMultiScale(
+        gray, scaleFactor=1.1, minNeighbors=5, minSize=(60, 60)
+    )
+    return len(faces)
 
+
+def analyze_frame(b64_frame: str) -> dict:
     frame = _decode_frame(b64_frame)
-    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     violations = []
 
     person_count = 0
@@ -97,6 +100,7 @@ def analyze_frame(b64_frame: str) -> dict:
     face_detected = True
     looking_away = False
 
+    # ── YOLO path (local dev with full ML stack) ─────────────────
     if _yolo_available:
         yolo_results = yolo_model(frame, verbose=False)[0]
         for box in yolo_results.boxes:
@@ -108,12 +112,21 @@ def analyze_frame(b64_frame: str) -> dict:
                 phone_detected = True
 
     if _mediapipe_available:
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame_rgb)
         result = face_landmarker.detect(mp_image)
         face_detected = len(result.face_landmarks) > 0
         if face_detected and len(result.face_landmarks[0]) >= 478:
             looking_away = _check_gaze(result.face_landmarks[0])
 
+    # ── OpenCV fallback (Render / lightweight deploy) ────────────
+    if not _yolo_available and not _mediapipe_available:
+        face_count = _opencv_face_detect(frame)
+        face_detected = face_count >= 1
+        if face_count > 1:
+            person_count = face_count
+
+    # ── Build violations ─────────────────────────────────────────
     if person_count > 1:
         violations.append("Multiple persons detected")
     if phone_detected:
