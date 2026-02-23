@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.env
+venv/
+*.pt
+face_landmarker.task
+check_db.py
+migrate_db.py
