@@ -1,5 +1,6 @@
 import os
 import pymysql
+from pymysql.cursors import DictCursor
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -11,7 +12,11 @@ DB_CONFIG = {
     "password": os.getenv("DB_PASSWORD"),
     "database": os.getenv("DB_NAME"),
     "ssl": {"ca": None},
-    "cursorclass": pymysql.cursors.DictCursor,
+    "cursorclass": DictCursor,
+    "connect_timeout": 10,
+    "read_timeout": 10,
+    "write_timeout": 10,
+    "autocommit": False,
 }
 
 
