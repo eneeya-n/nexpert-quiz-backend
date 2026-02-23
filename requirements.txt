@@ -1,9 +1,9 @@
-fastapi==0.115.6
-uvicorn==0.34.0
-pymysql==1.1.1
-cryptography==44.0.0
-python-dotenv==1.0.1
-pydantic[email]==2.10.4
-python-multipart==0.0.20
+fastapi
+uvicorn
+pymysql
+cryptography
+python-dotenv
+pydantic[email]
+python-multipart
 numpy
 opencv-python-headless

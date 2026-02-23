@@ -3,9 +3,12 @@ services:
     name: nexpert-quiz-api
     runtime: python
     plan: free
+    pythonVersion: "3.11.9"
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
       - key: DB_HOST
         sync: false
       - key: DB_PORT
@@ -16,5 +19,3 @@ services:
         sync: false
       - key: DB_NAME
         sync: false
-      - key: PYTHON_VERSION
-        value: "3.11.9"
