@@ -35,8 +35,14 @@ def init_db():
                     email VARCHAR(150) NOT NULL UNIQUE,
                     score INT DEFAULT 0,
                     violation_count INT DEFAULT 0,
+                    tab_switch_count INT DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
+            """)
+            # Keep existing deployments compatible by adding column if table already exists.
+            cur.execute("""
+                ALTER TABLE students
+                ADD COLUMN IF NOT EXISTS tab_switch_count INT DEFAULT 0
             """)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS violations (

@@ -126,6 +126,8 @@ def analyze(data: FrameData):
 
 @app.post("/api/log-violation")
 def log_violation(data: ViolationLog):
+    violation_text = data.violation_type.strip().lower()
+    is_tab_switch = "tab switch" in violation_text
     conn = get_connection()
     try:
         with conn.cursor() as cur:
@@ -133,17 +135,31 @@ def log_violation(data: ViolationLog):
                 "INSERT INTO violations (student_id, violation_type) VALUES (%s, %s)",
                 (data.student_id, data.violation_type),
             )
+            if is_tab_switch:
+                cur.execute(
+                    """
+                    UPDATE students
+                    SET violation_count = violation_count + 1,
+                        tab_switch_count = tab_switch_count + 1
+                    WHERE id = %s
+                    """,
+                    (data.student_id,),
+                )
+            else:
+                cur.execute(
+                    "UPDATE students SET violation_count = violation_count + 1 WHERE id = %s",
+                    (data.student_id,),
+                )
             cur.execute(
-                "UPDATE students SET violation_count = violation_count + 1 WHERE id = %s",
-                (data.student_id,),
-            )
-            cur.execute(
-                "SELECT violation_count FROM students WHERE id = %s",
+                "SELECT violation_count, tab_switch_count FROM students WHERE id = %s",
                 (data.student_id,),
             )
             row = cur.fetchone()
             conn.commit()
-        return {"total_violations": row["violation_count"] if row else 0}
+        return {
+            "total_violations": row["violation_count"] if row else 0,
+            "tab_switch_count": row["tab_switch_count"] if row else 0,
+        }
     finally:
         conn.close()
 
