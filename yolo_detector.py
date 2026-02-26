@@ -4,48 +4,61 @@ import urllib.request
 import numpy as np
 import cv2
 
+
+def _env_flag(name: str, default: str = "false") -> bool:
+    return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "on"}
+
 # ── OpenCV Haar Cascade (always available, lightweight) ──────────
 _cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
 face_cascade = cv2.CascadeClassifier(_cascade_path)
 
+# Heavy ML paths are expensive on small CPU plans.
+_heavy_detection_enabled = _env_flag("ENABLE_HEAVY_DETECTION", "false")
+
 # ── Optional: YOLO for person/phone detection ────────────────────
 _yolo_available = False
-try:
-    from ultralytics import YOLO
-    yolo_model = YOLO("yolov8n.pt")
-    _yolo_available = True
-except Exception:
+if _heavy_detection_enabled:
+    try:
+        from ultralytics import YOLO
+        yolo_model = YOLO("yolov8n.pt")
+        _yolo_available = True
+    except Exception:
+        yolo_model = None
+else:
     yolo_model = None
 
 # ── Optional: MediaPipe for gaze detection ───────────────────────
 _mediapipe_available = False
-try:
-    import mediapipe as mp
-    from mediapipe.tasks.python import BaseOptions
-    from mediapipe.tasks.python.vision import (
-        FaceLandmarker,
-        FaceLandmarkerOptions,
-        RunningMode,
-    )
+if _heavy_detection_enabled:
+    try:
+        import mediapipe as mp
+        from mediapipe.tasks.python import BaseOptions
+        from mediapipe.tasks.python.vision import (
+            FaceLandmarker,
+            FaceLandmarkerOptions,
+            RunningMode,
+        )
 
-    MODEL_PATH = os.path.join(os.path.dirname(__file__), "face_landmarker.task")
-    _MODEL_URL = (
-        "https://storage.googleapis.com/mediapipe-models/"
-        "face_landmarker/face_landmarker/float16/latest/face_landmarker.task"
-    )
-    if not os.path.exists(MODEL_PATH):
-        urllib.request.urlretrieve(_MODEL_URL, MODEL_PATH)
+        MODEL_PATH = os.path.join(os.path.dirname(__file__), "face_landmarker.task")
+        _MODEL_URL = (
+            "https://storage.googleapis.com/mediapipe-models/"
+            "face_landmarker/face_landmarker/float16/latest/face_landmarker.task"
+        )
+        if not os.path.exists(MODEL_PATH):
+            urllib.request.urlretrieve(_MODEL_URL, MODEL_PATH)
 
-    _landmarker_options = FaceLandmarkerOptions(
-        base_options=BaseOptions(model_asset_path=MODEL_PATH),
-        running_mode=RunningMode.IMAGE,
-        num_faces=2,
-        min_face_detection_confidence=0.5,
-        min_face_presence_confidence=0.5,
-    )
-    face_landmarker = FaceLandmarker.create_from_options(_landmarker_options)
-    _mediapipe_available = True
-except Exception:
+        _landmarker_options = FaceLandmarkerOptions(
+            base_options=BaseOptions(model_asset_path=MODEL_PATH),
+            running_mode=RunningMode.IMAGE,
+            num_faces=2,
+            min_face_detection_confidence=0.5,
+            min_face_presence_confidence=0.5,
+        )
+        face_landmarker = FaceLandmarker.create_from_options(_landmarker_options)
+        _mediapipe_available = True
+    except Exception:
+        face_landmarker = None
+else:
     face_landmarker = None
 
 PERSON_CLASS = 0

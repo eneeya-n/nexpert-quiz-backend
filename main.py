@@ -1,3 +1,6 @@
+import os
+import time
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -6,6 +9,9 @@ from database import get_connection, init_db
 from models import StudentRegister, AnswerSubmission, FrameData, ViolationLog
 from questions import QUESTIONS
 from yolo_detector import analyze_frame
+
+VIOLATION_DEDUP_SECONDS = int(os.getenv("VIOLATION_DEDUP_SECONDS", "20"))
+_last_violation_logged = {}
 
 
 @asynccontextmanager
@@ -97,15 +103,23 @@ def analyze(data: FrameData):
     conn = get_connection()
     try:
         with conn.cursor() as cur:
+            logged_count = 0
             if result["violation_count"] > 0:
+                now = time.time()
                 for v in result["violations"]:
-                    cur.execute(
-                        "INSERT INTO violations (student_id, violation_type) VALUES (%s, %s)",
-                        (data.student_id, v),
-                    )
+                    dedup_key = (data.student_id, v)
+                    prev = _last_violation_logged.get(dedup_key, 0)
+                    if now - prev >= VIOLATION_DEDUP_SECONDS:
+                        cur.execute(
+                            "INSERT INTO violations (student_id, violation_type) VALUES (%s, %s)",
+                            (data.student_id, v),
+                        )
+                        _last_violation_logged[dedup_key] = now
+                        logged_count += 1
+            if logged_count > 0:
                 cur.execute(
                     "UPDATE students SET violation_count = violation_count + %s WHERE id = %s",
-                    (result["violation_count"], data.student_id),
+                    (logged_count, data.student_id),
                 )
 
             cur.execute(
