@@ -1,4 +1,5 @@
 import os
+import re
 import time
 
 from fastapi import FastAPI, HTTPException
@@ -57,8 +58,14 @@ def register_student(data: StudentRegister):
 
 @app.get("/api/questions")
 def get_questions():
+    def _strip_rows_from_question(text: str) -> str:
+        # Keep table column context, hide sample row values.
+        cleaned = re.sub(r",\s*rows=\[\[.*?\]\]", "", text)
+        cleaned = re.sub(r"\s{2,}", " ", cleaned)
+        return cleaned
+
     safe_questions = [
-        {"id": q["id"], "question": q["question"], "options": q["options"]}
+        {"id": q["id"], "question": _strip_rows_from_question(q["question"]), "options": q["options"]}
         for q in QUESTIONS
     ]
     return {"questions": safe_questions, "total": len(safe_questions), "duration_minutes": 60}
