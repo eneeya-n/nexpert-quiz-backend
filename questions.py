@@ -1,7 +1,7 @@
 QUESTIONS = [
     {
         "id": 1,
-        "question": "Table: columns=[CustomerID, Age, Tenure, Churn], rows=[[C001,45,12,Yes],[C002,30,24,No]]. The company wants to predict Churn. What type of ML problem is this?",
+        "question": "[Telecom Table Set] Table: columns=[CustomerID, Age, Tenure, Churn], rows=[[C001,45,12,Yes],[C002,30,24,No]]. The company wants to predict Churn. What type of ML problem is this?",
         "options": ["Regression", "Classification", "Clustering", "Reinforcement Learning"],
         "answer": "Classification",
     },
