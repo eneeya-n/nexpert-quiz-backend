@@ -7,15 +7,6 @@ class StudentRegister(BaseModel):
     confirm_email: EmailStr
 
 
-class OTPRequest(BaseModel):
-    email: EmailStr
-
-
-class OTPVerify(BaseModel):
-    email: EmailStr
-    otp: str
-
-
 class AnswerSubmission(BaseModel):
     student_id: int
     answers: dict

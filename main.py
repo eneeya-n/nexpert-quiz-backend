@@ -1,24 +1,17 @@
 import os
-import secrets
-import smtplib
 import time
-from email.message import EmailMessage
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from database import get_connection, init_db
-from models import StudentRegister, AnswerSubmission, FrameData, ViolationLog, OTPRequest, OTPVerify
+from models import StudentRegister, AnswerSubmission, FrameData, ViolationLog
 from questions import QUESTIONS
 from yolo_detector import analyze_frame
 
 VIOLATION_DEDUP_SECONDS = int(os.getenv("VIOLATION_DEDUP_SECONDS", "20"))
 _last_violation_logged = {}
-OTP_TTL_SECONDS = int(os.getenv("OTP_TTL_SECONDS", "300"))
-EMAIL_VERIFIED_TTL_SECONDS = int(os.getenv("EMAIL_VERIFIED_TTL_SECONDS", "1800"))
-_otp_store = {}
-_verified_emails = {}
 
 
 @asynccontextmanager
@@ -38,84 +31,11 @@ app.add_middleware(
 )
 
 
-def _normalize_email(email: str) -> str:
-    return email.strip().lower()
-
-
-def _cleanup_auth_state():
-    now = time.time()
-    for email, record in list(_otp_store.items()):
-        if record["expires_at"] <= now:
-            _otp_store.pop(email, None)
-    for email, expires_at in list(_verified_emails.items()):
-        if expires_at <= now:
-            _verified_emails.pop(email, None)
-
-
-def _send_otp_email(email: str, otp: str):
-    smtp_host = os.getenv("SMTP_HOST")
-    smtp_user = os.getenv("SMTP_USER")
-    smtp_pass = os.getenv("SMTP_PASSWORD")
-    smtp_from = os.getenv("SMTP_FROM", smtp_user)
-    smtp_port = int(os.getenv("SMTP_PORT", "587"))
-
-    if not smtp_host or not smtp_user or not smtp_pass or not smtp_from:
-        raise HTTPException(
-            status_code=500,
-            detail="OTP email service not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM.",
-        )
-
-    msg = EmailMessage()
-    msg["Subject"] = "Your NExpert OTP Verification Code"
-    msg["From"] = smtp_from
-    msg["To"] = email
-    msg.set_content(
-        f"Your OTP is {otp}. It is valid for {OTP_TTL_SECONDS // 60} minutes.\n\nNExpert Academy"
-    )
-
-    try:
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as server:
-            server.starttls()
-            server.login(smtp_user, smtp_pass)
-            server.send_message(msg)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to send OTP email: {e}")
-
-
-@app.post("/api/request-otp")
-def request_otp(data: OTPRequest):
-    _cleanup_auth_state()
-    email = _normalize_email(data.email)
-    otp = f"{secrets.randbelow(1_000_000):06d}"
-    _otp_store[email] = {"otp": otp, "expires_at": time.time() + OTP_TTL_SECONDS}
-    _send_otp_email(email, otp)
-    return {"message": "OTP sent successfully"}
-
-
-@app.post("/api/verify-otp")
-def verify_otp(data: OTPVerify):
-    _cleanup_auth_state()
-    email = _normalize_email(data.email)
-    otp_input = data.otp.strip()
-    record = _otp_store.get(email)
-    if not record:
-        raise HTTPException(status_code=400, detail="OTP not found or expired")
-    if record["otp"] != otp_input:
-        raise HTTPException(status_code=400, detail="Invalid OTP")
-
-    _otp_store.pop(email, None)
-    _verified_emails[email] = time.time() + EMAIL_VERIFIED_TTL_SECONDS
-    return {"verified": True, "message": "Email verified"}
-
-
 @app.post("/api/register")
 def register_student(data: StudentRegister):
     if data.email != data.confirm_email:
         raise HTTPException(status_code=400, detail="Emails do not match")
-    _cleanup_auth_state()
-    email = _normalize_email(data.email)
-    if _verified_emails.get(email, 0) <= time.time():
-        raise HTTPException(status_code=400, detail="Please verify your email with OTP first")
+    email = data.email.strip().lower()
 
     conn = get_connection()
     try:
@@ -130,7 +50,6 @@ def register_student(data: StudentRegister):
                 (data.name, email),
             )
             conn.commit()
-            _verified_emails.pop(email, None)
             return {"student_id": cur.lastrowid, "message": "Registered successfully"}
     finally:
         conn.close()
