@@ -5,13 +5,16 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+ca_path = os.getenv("DB_CA_PATH") or os.getenv("CA_PATH")
+ssl_config = {"ca": ca_path} if ca_path and os.path.isfile(ca_path) else {"ca": None}
+
 DB_CONFIG = {
     "host": os.getenv("DB_HOST"),
     "port": int(os.getenv("DB_PORT", 4000)),
     "user": os.getenv("DB_USER"),
     "password": os.getenv("DB_PASSWORD"),
     "database": os.getenv("DB_NAME"),
-    "ssl": {"ca": None},
+    "ssl": ssl_config,
     "cursorclass": DictCursor,
     "connect_timeout": 10,
     "read_timeout": 10,
